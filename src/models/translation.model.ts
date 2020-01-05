@@ -1,5 +1,5 @@
 export interface TranslationModel {
-  fingerprint: string;
+  id: string;
   confidence: number;
   translation: string;
 }

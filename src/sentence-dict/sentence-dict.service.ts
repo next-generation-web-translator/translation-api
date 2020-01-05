@@ -1,34 +1,36 @@
 import { Injectable } from '@nestjs/common';
 import { TranslationModel } from '../models/translation.model';
 import { OriginalModel } from '../models/original.model';
-import { SentenceDictEntryModel } from '../entities/sentence-dict-entry.model';
+import { SentencePairEntity } from '../entities/sentence-pair.entity';
 import * as leven from 'leven';
 import { pick } from 'lodash';
+import { Repository } from 'typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
 
 @Injectable()
 export class SentenceDict {
-  private dict: SentenceDictEntryModel[] = [];
-
-  query(fingerprints: string[]): TranslationModel[] {
-    return fingerprints
-        .map(fingerprint => this.dict.find(it => it.fingerprint === fingerprint))
-        .filter(entry => !!entry)
-        .map(toTranslationModel);
+  constructor(@InjectRepository(SentencePairEntity) private readonly repository: Repository<SentencePairEntity>) {
   }
 
-  create(originals: OriginalModel[]): TranslationModel[] {
-    return originals
-        .map(it => this.fuzzyFind(it))
-        .map(entry => this.addEntry(entry))
-        .map(toTranslationModel);
+  async setup(pairs: SentencePairEntity[]): Promise<SentencePairEntity[]> {
+    return this.repository.save(pairs);
   }
 
-  load(dict: SentenceDictEntryModel[]): void {
-    this.dict = dict;
+  async query(ids: string[]): Promise<TranslationModel[]> {
+    const entries = await this.repository.findByIds(ids);
+    return entries.filter(it => !!it).map(toTranslationModel);
   }
 
-  fuzzyFind(original: OriginalModel): SentenceDictEntryModel {
-    const sortedEntries = this.dict.map(value => ({ value, confidence: calculateConfidence(original, value) }))
+  async create(originals: OriginalModel[]): Promise<TranslationModel[]> {
+    const pairs = await this.findNearestPairs(originals);
+    const result = await this.repository.save(pairs);
+
+    return result.map(toTranslationModel);
+  }
+
+  fuzzyFind(dict: SentencePairEntity[], original: OriginalModel): SentencePairEntity {
+    const sortedEntries = dict
+        .map(value => ({ value, confidence: calculateConfidence(original, value) }))
         .sort((v1, v2) => v2.confidence - v1.confidence);
     const mostConfidentEntry = sortedEntries[0];
     return {
@@ -38,9 +40,9 @@ export class SentenceDict {
     };
   }
 
-  private addEntry(entry: SentenceDictEntryModel): SentenceDictEntryModel {
-    this.dict.push(entry);
-    return entry;
+  private async findNearestPairs(originals: OriginalModel[]) {
+    const entries = await this.repository.find();
+    return originals.map(it => this.fuzzyFind(entries, it));
   }
 }
 
@@ -50,20 +52,20 @@ function confidenceFromEditDistance(text1: string, text2: string): number {
   return 1 - diff / total;
 }
 
-function calculateConfidence(original: OriginalModel, dictEntry: SentenceDictEntryModel): number {
+function calculateConfidence(original: OriginalModel, dictEntry: SentencePairEntity): number {
   const confidenceOfPageUri = confidenceFromEditDistance(original.pageUri, dictEntry.pageUri);
   const confidenceOfContent = confidenceFromEditDistance(original.original, dictEntry.original);
-  const confidenceOfPaths = confidenceFromEditDistance(original.paths.join('/'), dictEntry.paths.join('/'));
+  const confidenceOfxpath = confidenceFromEditDistance(original.xpath, dictEntry.xpath);
 
   // TODO: Automatically adjust weights through machine learning
   const weightOfPageUri = 0.25;
-  const weightOfPaths = 0.25;
+  const weightOfxpath = 0.25;
   const weightOfContent = 0.5;
 
-  const confidence = confidenceOfPageUri * weightOfPageUri + confidenceOfContent * weightOfContent + confidenceOfPaths * weightOfPaths;
+  const confidence = confidenceOfPageUri * weightOfPageUri + confidenceOfContent * weightOfContent + confidenceOfxpath * weightOfxpath;
   return +confidence.toFixed(2);
 }
 
-export function toTranslationModel(entry: SentenceDictEntryModel) {
-  return pick(entry, ['fingerprint', 'confidence', 'translation']);
+export function toTranslationModel(entry: SentencePairEntity) {
+  return pick(entry, ['id', 'confidence', 'translation']);
 }

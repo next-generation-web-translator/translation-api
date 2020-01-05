@@ -3,6 +3,7 @@ import { TranslationModel } from './models/translation.model';
 import { OriginalModel } from './models/original.model';
 import { MessageBody } from '@nestjs/websockets';
 import { SentenceDict } from './sentence-dict/sentence-dict.service';
+import { SentencePairEntity } from './entities/sentence-pair.entity';
 
 @Controller()
 export class AppController {
@@ -10,12 +11,34 @@ export class AppController {
   }
 
   @Get()
-  query(@Query('fingerprints') fingerprints: string): TranslationModel[] {
-    return this.dict.query(fingerprints.split(','));
+  async query(@Query('ids') ids: string): Promise<TranslationModel[]> {
+    return this.dict.query(ids.split(','));
   }
 
   @Post()
-  create(@MessageBody() original: OriginalModel[]): TranslationModel[] {
+  async create(@MessageBody() original: OriginalModel[]): Promise<TranslationModel[]> {
     return this.dict.create(original);
+  }
+
+  @Get('setup')
+  async setup(): Promise<SentencePairEntity[]> {
+    return this.dict.setup([
+      {
+        id: '1',
+        original: 'this is a cup',
+        translation: '这是一个杯子',
+        pageUri: 'https://angular.io/about',
+        xpath: '/p/0',
+        confidence: 1,
+      },
+      {
+        id: '2',
+        original: 'this is another cup',
+        translation: '这是另一个杯子',
+        pageUri: 'https://angular.io/about',
+        xpath: '/p/1',
+        confidence: 1,
+      },
+    ]);
   }
 }

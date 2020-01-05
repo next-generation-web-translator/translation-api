@@ -1,36 +1,58 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SentenceDict, toTranslationModel } from './sentence-dict.service';
-import { SentenceDictEntryModel } from '../entities/sentence-dict-entry.model';
+import { SentencePairEntity } from '../entities/sentence-pair.entity';
+import { getRepositoryToken } from '@nestjs/typeorm';
 
-const dict: SentenceDictEntryModel[] = [
-  {
-    fingerprint: '1',
-    original: 'this is a cup',
-    translation: '这是一个杯子',
-    pageUri: 'https://angular.io/about',
-    paths: ['p', 0],
-    confidence: 1,
-  },
-  {
-    fingerprint: '2',
-    original: 'this is another cup',
-    translation: '这是另一个杯子',
-    pageUri: 'https://angular.io/about',
-    paths: ['p', 1],
-    confidence: 1,
-  },
-];
+let dict: SentencePairEntity[];
+
+class MockRepository {
+  async findByIds(ids: string[]): Promise<SentencePairEntity[]> {
+    return ids.map(id => dict.find(entry => entry.id === id));
+  }
+
+  async find(): Promise<SentencePairEntity[]> {
+    return dict;
+  }
+
+  async save(entities: SentencePairEntity[]): Promise<SentencePairEntity[]> {
+    dict.push(...entities);
+    return entities;
+  }
+}
 
 describe('SentenceDictService', () => {
   let service: SentenceDict;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [SentenceDict],
+      providers: [
+        SentenceDict,
+        {
+          provide: getRepositoryToken(SentencePairEntity),
+          useClass: MockRepository,
+        },
+      ],
     }).compile();
 
     service = module.get<SentenceDict>(SentenceDict);
-    service.load(dict);
+    dict = [
+      {
+        id: '1',
+        original: 'this is a cup',
+        translation: '这是一个杯子',
+        pageUri: 'https://angular.io/about',
+        xpath: '/p/0',
+        confidence: 1,
+      },
+      {
+        id: '2',
+        original: 'this is another cup',
+        translation: '这是另一个杯子',
+        pageUri: 'https://angular.io/about',
+        xpath: '/p/1',
+        confidence: 1,
+      },
+    ];
   });
 
   it('should be defined', () => {
@@ -38,10 +60,10 @@ describe('SentenceDictService', () => {
   });
 
   it('should translate when exact matches', () => {
-    const result = service.fuzzyFind({
-      fingerprint: '1',
+    const result = service.fuzzyFind(dict, {
+      id: '1',
       pageUri: 'https://angular.io/about',
-      paths: ['p', 0],
+      xpath: '/p/0',
       original: 'this is a cup',
     });
 
@@ -49,39 +71,39 @@ describe('SentenceDictService', () => {
     expect(result.translation).toBe('这是一个杯子');
   });
 
-  it('should translate when exact uri and paths distance', () => {
-    const result = service.fuzzyFind({
-      fingerprint: '3',
+  it('should translate when exact uri and xpath distance', () => {
+    const result = service.fuzzyFind(dict, {
+      id: '3',
       pageUri: 'https://angular.io/about',
-      paths: ['p', 1],
+      xpath: '/p/1',
       original: 'this is a cup',
     });
 
-    expect(result.confidence).toBeCloseTo(0.92, 2);
+    expect(result.confidence).toBeCloseTo(0.94, 2);
     expect(result.translation).toBe('这是一个杯子');
   });
 
-  it('should query by fingerprints', () => {
-    expect(service.query(['1', '2'])).toStrictEqual(dict.map(toTranslationModel));
+  it('should query by fingerprints', async () => {
+    expect(await service.query(['1', '2'])).toStrictEqual(dict.map(toTranslationModel));
   });
 
-  it('should query by fingerprints, but ignore non-existing entries', () => {
-    expect(service.query(['1', '2', '3'])).toStrictEqual(dict.map(toTranslationModel));
+  it('should query by fingerprints, but ignore non-existing entries', async () => {
+    expect(await service.query(['1', '2', '3'])).toStrictEqual(dict.map(toTranslationModel));
   });
 
-  it('should create when not exists', () => {
-    service.create([
+  it('should create when not exists', async () => {
+    await service.create([
       {
-        fingerprint: '3',
+        id: '3',
         pageUri: 'https://angular.io/about',
-        paths: ['p', 1],
+        xpath: '/p/1',
         original: 'this is a cup',
       },
     ]);
-    const result = service.query(['3']);
+    const result = await service.query(['3']);
     expect(result).toStrictEqual([{
-      fingerprint: '3',
-      confidence: 0.92,
+      id: '3',
+      confidence: 0.94,
       translation: '这是一个杯子',
     }]);
   });

@@ -1,6 +1,6 @@
 export interface OriginalModel {
-  fingerprint: string;
+  id: string;
   pageUri: string;
-  paths: Array<string | number>;
+  xpath: string;
   original: string;
 }

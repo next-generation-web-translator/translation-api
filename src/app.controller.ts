@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Query } from '@nestjs/common';
+import { Controller, Get, Header, NotFoundException, Post, Query } from '@nestjs/common';
 import { TranslationModel } from './models/translation.model';
 import { OriginalModel } from './models/original.model';
 import { MessageBody } from '@nestjs/websockets';
@@ -11,12 +11,17 @@ export class AppController {
   }
 
   @Get()
-  async query(@Query('ids') ids: string): Promise<TranslationModel[]> {
-    return this.dict.query(ids.split(','));
+  @Header('Cache-Control', 'public, max-age=3600')
+  async query(@Query('id') id: string): Promise<TranslationModel> {
+    const result = await this.dict.query(id);
+    if (!result) {
+      throw new NotFoundException(`${id} not found!`);
+    }
+    return result;
   }
 
   @Post()
-  async create(@MessageBody() original: OriginalModel[]): Promise<TranslationModel[]> {
+  async create(@MessageBody() original: OriginalModel): Promise<TranslationModel> {
     return this.dict.create(original);
   }
 

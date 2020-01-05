@@ -12,20 +12,23 @@ export class SentenceDict {
   constructor(@InjectRepository(SentencePairEntity) private readonly repository: Repository<SentencePairEntity>) {
   }
 
+  private dict: SentencePairEntity[] = [];
+
+  async load(): Promise<SentencePairEntity[]> {
+    return this.repository.find();
+  }
+
   async setup(pairs: SentencePairEntity[]): Promise<SentencePairEntity[]> {
     return this.repository.save(pairs);
   }
 
-  async query(ids: string[]): Promise<TranslationModel[]> {
-    const entries = await this.repository.findByIds(ids);
-    return entries.filter(it => !!it).map(toTranslationModel);
+  async query(id: string): Promise<TranslationModel> {
+    return this.repository.findOne(id).then(toTranslationModel);
   }
 
-  async create(originals: OriginalModel[]): Promise<TranslationModel[]> {
-    const pairs = await this.findNearestPairs(originals);
-    const result = await this.repository.save(pairs);
-
-    return result.map(toTranslationModel);
+  async create(original: OriginalModel): Promise<TranslationModel> {
+    const pair = await this.findNearestPair(original);
+    return await this.repository.save(pair).then(toTranslationModel);
   }
 
   fuzzyFind(dict: SentencePairEntity[], original: OriginalModel): SentencePairEntity {
@@ -40,9 +43,9 @@ export class SentenceDict {
     };
   }
 
-  private async findNearestPairs(originals: OriginalModel[]) {
+  private async findNearestPair(original: OriginalModel): Promise<SentencePairEntity> {
     const entries = await this.repository.find();
-    return originals.map(it => this.fuzzyFind(entries, it));
+    return this.fuzzyFind(entries, original);
   }
 }
 
@@ -67,5 +70,5 @@ function calculateConfidence(original: OriginalModel, dictEntry: SentencePairEnt
 }
 
 export function toTranslationModel(entry: SentencePairEntity) {
-  return pick(entry, ['id', 'confidence', 'translation']);
+  return entry && pick(entry, ['id', 'confidence', 'translation']);
 }

@@ -6,17 +6,17 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 let dict: SentencePairEntity[];
 
 class MockRepository {
-  async findByIds(ids: string[]): Promise<SentencePairEntity[]> {
-    return ids.map(id => dict.find(entry => entry.id === id));
+  async findOne(id: string): Promise<SentencePairEntity> {
+    return dict.find(entry => entry.id === id);
   }
 
   async find(): Promise<SentencePairEntity[]> {
     return dict;
   }
 
-  async save(entities: SentencePairEntity[]): Promise<SentencePairEntity[]> {
-    dict.push(...entities);
-    return entities;
+  async save(entity: SentencePairEntity): Promise<SentencePairEntity> {
+    dict.push(entity);
+    return entity;
   }
 }
 
@@ -84,27 +84,27 @@ describe('SentenceDictService', () => {
   });
 
   it('should query by fingerprints', async () => {
-    expect(await service.query(['1', '2'])).toStrictEqual(dict.map(toTranslationModel));
+    expect(await service.query('1')).toStrictEqual(dict.map(toTranslationModel).find(it => it.id === '1'));
   });
 
   it('should query by fingerprints, but ignore non-existing entries', async () => {
-    expect(await service.query(['1', '2', '3'])).toStrictEqual(dict.map(toTranslationModel));
+    expect(await service.query('3')).toStrictEqual({});
   });
 
   it('should create when not exists', async () => {
-    await service.create([
-      {
-        id: '3',
-        pageUri: 'https://angular.io/about',
-        xpath: '/p/1',
-        original: 'this is a cup',
-      },
-    ]);
-    const result = await service.query(['3']);
-    expect(result).toStrictEqual([{
+    await service.create(
+        {
+          id: '3',
+          pageUri: 'https://angular.io/about',
+          xpath: '/p/1',
+          original: 'this is a cup',
+        },
+    );
+    const result = await service.query('3');
+    expect(result).toStrictEqual({
       id: '3',
       confidence: 0.94,
       translation: '这是一个杯子',
-    }]);
+    });
   });
 });

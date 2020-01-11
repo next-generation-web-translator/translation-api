@@ -2,7 +2,7 @@ import { OriginalModel } from '../models/original.model';
 import { TranslationModel } from '../models/translation.model';
 import { Column, Entity, PrimaryColumn } from 'typeorm';
 
-@Entity()
+@Entity('sentence_dict')
 export class SentencePairEntity implements OriginalModel, TranslationModel {
   @PrimaryColumn()
   id: string;
@@ -10,10 +10,10 @@ export class SentencePairEntity implements OriginalModel, TranslationModel {
   pageUri: string;
   @Column()
   xpath: string;
-  @Column()
+  @Column({ type: 'text' })
   original: string;
-  @Column()
+  @Column({ type: 'text' })
   translation: string;
-  @Column()
+  @Column({ precision: 2 })
   confidence: number;
 }

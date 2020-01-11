@@ -12,8 +12,6 @@ export class SentenceDict {
   constructor(@InjectRepository(SentencePairEntity) private readonly repository: Repository<SentencePairEntity>) {
   }
 
-  private dict: SentencePairEntity[] = [];
-
   async load(): Promise<SentencePairEntity[]> {
     return this.repository.find();
   }
@@ -27,8 +25,13 @@ export class SentenceDict {
   }
 
   async create(original: OriginalModel): Promise<TranslationModel> {
-    const pair = await this.findNearestPair(original);
-    return await this.repository.save(pair).then(toTranslationModel);
+    const result = {
+      id: original.id,
+      confidence: 0,
+      translation: this.translate(original.original),
+    };
+    await this.repository.save({ ...original, ...result });
+    return result;
   }
 
   fuzzyFind(dict: SentencePairEntity[], original: OriginalModel): SentencePairEntity {
@@ -41,6 +44,14 @@ export class SentenceDict {
       translation: mostConfidentEntry.value.translation,
       confidence: mostConfidentEntry.confidence,
     };
+  }
+
+  private translate(html: string) {
+    if (html.indexOf('>') !== -1) {
+      return html.replace(/>(.*?)</g, '>中$1<');
+    } else {
+      return '中' + html;
+    }
   }
 
   private async findNearestPair(original: OriginalModel): Promise<SentencePairEntity> {
